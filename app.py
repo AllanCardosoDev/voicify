@@ -1,32 +1,23 @@
 """
 Voicify - TTS Multilíngue Avançado
-Versão 2.0 com recursos melhorados
+Versão 2.0 com recursos melhorados e interface consistente
 """
 import streamlit as st
 import io
 import os
 import time
-from datetime import datetime
-from typing import List, Dict, Any
-
-# Imports locais (se usar arquivos separados)
-# from config import VoicifyConfig, LanguageConfig, CUSTOM_CSS
-# from utils import (sanitize_filename, validate_text, estimate_audio_duration, 
-#                    format_duration, format_file_size, count_words, 
-#                    count_characters, split_text_into_chunks, setup_logging)
-# from audio_generator import AudioGenerator
-
-# OU imports diretos se preferir tudo em um arquivo:
-from gtts import gTTS
 import re
 import hashlib
-import logging
+from datetime import datetime
+from typing import List, Dict, Any
+from gtts import gTTS
 
 # ============================================
-# CONFIGURAÇÕES (inline - pode separar depois)
+# CONFIGURAÇÕES
 # ============================================
 
 class VoicifyConfig:
+    """Configurações gerais da aplicação."""
     APP_TITLE = "Voicify - TTS Multilíngue Avançado"
     APP_ICON = "🎤"
     VERSION = "2.0"
@@ -38,10 +29,12 @@ class VoicifyConfig:
     ENABLE_CACHE = True
     CACHE_DIR = ".audio_cache"
 
+
 class LanguageConfig:
+    """Configurações de idiomas e variantes."""
     LANGUAGES = {
-        "🇧🇷 Português (Brasil)": {"code": "pt-br", "tld": "com.br"},
-        "🇵🇹 Português (Portugal)": {"code": "pt-pt", "tld": "pt"},
+        "🇧🇷 Português (Brasil)": {"code": "pt", "tld": "com.br"},
+        "🇵🇹 Português (Portugal)": {"code": "pt", "tld": "pt"},
         "🇺🇸 Inglês (EUA)": {"code": "en", "tld": "com"},
         "🇬🇧 Inglês (UK)": {"code": "en", "tld": "co.uk"},
         "🇦🇺 Inglês (Austrália)": {"code": "en", "tld": "com.au"},
@@ -58,19 +51,31 @@ class LanguageConfig:
         "🇮🇳 Hindi": {"code": "hi", "tld": "co.in"},
     }
 
+
 # CSS Customizado
 CUSTOM_CSS = """
 <style>
+    /* Reset de estilos */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+    
+    /* Título principal */
     .main-title {
         text-align: center;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+        background-clip: text;
         font-size: 3.5rem;
         font-weight: bold;
         margin-bottom: 0;
         padding: 1rem 0;
     }
+    
+    /* Subtítulo */
     .subtitle {
         text-align: center;
         color: #666;
@@ -78,6 +83,8 @@ CUSTOM_CSS = """
         margin-top: 0;
         margin-bottom: 2rem;
     }
+    
+    /* Cards de estatísticas */
     .stat-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 1.5rem;
@@ -86,18 +93,28 @@ CUSTOM_CSS = """
         text-align: center;
         margin: 0.5rem 0;
         box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        transition: transform 0.3s ease;
     }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+    
     .stat-value {
         font-size: 2.5rem;
         font-weight: bold;
         margin: 0.5rem 0;
     }
+    
     .stat-label {
         font-size: 1rem;
         opacity: 0.9;
         text-transform: uppercase;
         letter-spacing: 1px;
     }
+    
+    /* Card de áudio */
     .audio-card {
         background: #f8f9fa;
         border-radius: 15px;
@@ -105,15 +122,36 @@ CUSTOM_CSS = """
         margin: 1rem 0;
         border-left: 5px solid #667eea;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
     }
+    
+    .audio-card:hover {
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        transform: translateX(5px);
+    }
+    
+    /* Box de sucesso */
     .success-box {
-        background: #d4edda;
-        border: 2px solid #c3e6cb;
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+        border: 2px solid #28a745;
         color: #155724;
         padding: 1.5rem;
-        border-radius: 10px;
+        border-radius: 15px;
         margin: 1rem 0;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.2);
     }
+    
+    .success-box h3 {
+        margin: 0 0 1rem 0;
+        color: #155724;
+    }
+    
+    .success-box p {
+        margin: 0.5rem 0;
+        line-height: 1.6;
+    }
+    
+    /* Box de informação */
     .info-box {
         background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
         border-left: 5px solid #1976d2;
@@ -121,41 +159,102 @@ CUSTOM_CSS = """
         border-radius: 10px;
         margin: 1rem 0;
     }
+    
+    /* Box de aviso */
     .warning-box {
-        background: #fff3cd;
-        border: 2px solid #ffeaa7;
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+        border: 2px solid #ffc107;
         color: #856404;
         padding: 1rem;
         border-radius: 10px;
         margin: 1rem 0;
     }
+    
+    /* Botões customizados */
     .stButton > button {
         width: 100%;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
         font-weight: bold;
         font-size: 1.1rem;
-        border: none;
+        border: none !important;
         padding: 1rem;
         border-radius: 10px;
-        transition: all 0.3s;
+        transition: all 0.3s ease;
         box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
+    
     .stButton > button:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        transform: translateY(-3px) !important;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.3) !important;
     }
+    
+    /* Feature boxes - todos com mesmo estilo */
     .feature-box {
-        background: white;
-        border-radius: 10px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        border: 2px solid #e0e0e0;
-        transition: all 0.3s;
+        background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
+        border-radius: 12px;
+        padding: 1.2rem;
+        margin: 0.8rem 0;
+        border-left: 5px solid #667eea;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+        transition: all 0.3s ease;
     }
+    
     .feature-box:hover {
-        border-color: #667eea;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        background: linear-gradient(135deg, #c5cae9 0%, #9fa8da 100%);
+        border-left-width: 8px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        transform: translateX(5px);
+    }
+    
+    .feature-box strong {
+        color: #3f51b5;
+        font-size: 1.1rem;
+        display: block;
+        margin-bottom: 0.3rem;
+    }
+    
+    .feature-box small {
+        color: #5c6bc0;
+        font-size: 0.9rem;
+        line-height: 1.4;
+    }
+    
+    /* Sidebar customizada */
+    .sidebar-content {
+        padding: 1rem;
+    }
+    
+    /* Download button */
+    .stDownloadButton > button {
+        background: linear-gradient(135deg, #4caf50 0%, #45a049 100%) !important;
+        color: white !important;
+        font-weight: bold;
+        border: none !important;
+        padding: 0.8rem 1.5rem;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+    
+    .stDownloadButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4) !important;
+    }
+    
+    /* Animações */
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .animate-in {
+        animation: fadeIn 0.5s ease-out;
     }
 </style>
 """
@@ -170,6 +269,7 @@ def sanitize_filename(filename: str) -> str:
     filename = re.sub(r'\s+', '_', filename)
     return filename[:100] if filename else "audio"
 
+
 def validate_text(text: str, max_length: int = 10000):
     """Valida o texto de entrada."""
     if not text or not text.strip():
@@ -178,11 +278,13 @@ def validate_text(text: str, max_length: int = 10000):
         return False, f"⚠️ Texto muito longo. Máximo: {max_length:,} caracteres"
     return True, "✅ Texto válido"
 
+
 def estimate_audio_duration(text: str, words_per_minute: int = 150) -> float:
     """Estima a duração do áudio."""
     words = len(text.split())
     minutes = words / words_per_minute
     return minutes * 60
+
 
 def format_duration(seconds: float) -> str:
     """Formata duração para exibição."""
@@ -192,6 +294,7 @@ def format_duration(seconds: float) -> str:
     remaining_seconds = int(seconds % 60)
     return f"{minutes}m {remaining_seconds}s"
 
+
 def format_file_size(size_bytes: int) -> str:
     """Formata tamanho de arquivo."""
     for unit in ['B', 'KB', 'MB']:
@@ -200,38 +303,21 @@ def format_file_size(size_bytes: int) -> str:
         size_bytes /= 1024.0
     return f"{size_bytes:.1f} GB"
 
+
 def count_words(text: str) -> int:
     """Conta palavras no texto."""
     return len(text.split())
+
 
 def count_characters(text: str) -> int:
     """Conta caracteres no texto."""
     return len(text)
 
+
 def calculate_text_hash(text: str) -> str:
     """Calcula hash do texto para cache."""
     return hashlib.md5(text.encode('utf-8')).hexdigest()
 
-def split_long_text(text: str, max_length: int = 500) -> List[str]:
-    """Divide texto longo em partes menores."""
-    words = text.split()
-    chunks = []
-    current_chunk = []
-    current_length = 0
-    
-    for word in words:
-        current_length += len(word) + 1
-        if current_length > max_length:
-            chunks.append(' '.join(current_chunk))
-            current_chunk = [word]
-            current_length = len(word)
-        else:
-            current_chunk.append(word)
-    
-    if current_chunk:
-        chunks.append(' '.join(current_chunk))
-    
-    return chunks
 
 # ============================================
 # GERADOR DE ÁUDIO
@@ -264,6 +350,7 @@ def generate_audio(text: str, lang_code: str, tld: str = 'com') -> Dict[str, Any
             'error': str(e)
         }
 
+
 # ============================================
 # INICIALIZAÇÃO
 # ============================================
@@ -278,6 +365,7 @@ def init_session_state():
         st.session_state.total_characters = 0
     if 'show_stats' not in st.session_state:
         st.session_state.show_stats = True
+
 
 # ============================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -385,8 +473,7 @@ with col_settings:
     
     # Opções avançadas
     with st.expander("🎛️ Opções Avançadas", expanded=False):
-        # Velocidade (simulada - gTTS não suporta nativamente)
-        st.info("⚠️ Ajuste de velocidade requer pydub (pip install pydub)")
+        st.info("💡 **Dica:** Para ajuste de velocidade, instale: `pip install pydub`")
         
         # Dividir texto longo
         auto_split = st.checkbox(
@@ -399,8 +486,15 @@ with col_settings:
         quality = st.select_slider(
             "Qualidade de Áudio:",
             options=["Baixa", "Média", "Alta"],
-            value="Média",
-            help="Qualidade do áudio gerado (em desenvolvimento)"
+            value="Alta",
+            help="Qualidade do áudio gerado"
+        )
+        
+        # Preview antes de gerar
+        show_preview = st.checkbox(
+            "Mostrar preview do texto",
+            value=False,
+            help="Exibe uma análise do texto antes de gerar"
         )
 
 # ============================================
@@ -442,6 +536,9 @@ if generate_button:
                 progress_bar.progress(i / 100)
                 status_text.text(f"Preparando... {i}%")
             
+            status_text.text("🎙️ Sintetizando voz...")
+            progress_bar.progress(50)
+            
             # Gerar áudio
             result = generate_audio(
                 text_input,
@@ -450,6 +547,7 @@ if generate_button:
             )
             
             progress_bar.progress(100)
+            status_text.text("✅ Concluído!")
             
             if result['success']:
                 # Sucesso!
@@ -467,24 +565,30 @@ if generate_button:
                     'language': selected_language,
                     'size': file_size,
                     'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    'chars': len(text_input)
+                    'chars': len(text_input),
+                    'words': count_words(text_input),
+                    'duration': format_duration(estimate_audio_duration(text_input))
                 })
                 
+                time.sleep(0.5)
                 progress_bar.empty()
                 status_text.empty()
                 
                 # Exibir resultado
                 st.markdown(f"""
-                    <div class='success-box'>
+                    <div class='success-box animate-in'>
                         <h3>✅ Áudio Gerado com Sucesso!</h3>
-                        <p><strong>Nome:</strong> {audio_name}.mp3</p>
-                        <p><strong>Tamanho:</strong> {format_file_size(file_size)}</p>
-                        <p><strong>Tempo de geração:</strong> {gen_time:.2f}s</p>
-                        <p><strong>Idioma:</strong> {selected_language}</p>
+                        <p><strong>📁 Nome:</strong> {audio_name}.mp3</p>
+                        <p><strong>📊 Tamanho:</strong> {format_file_size(file_size)}</p>
+                        <p><strong>⏱️ Tempo de geração:</strong> {gen_time:.2f}s</p>
+                        <p><strong>🌍 Idioma:</strong> {selected_language}</p>
+                        <p><strong>📝 Palavras:</strong> {count_words(text_input):,}</p>
+                        <p><strong>🎵 Duração estimada:</strong> {format_duration(estimate_audio_duration(text_input))}</p>
                     </div>
                 """, unsafe_allow_html=True)
                 
                 # Player de áudio
+                st.markdown("### 🎵 Preview do Áudio")
                 st.audio(audio_data, format='audio/mp3')
                 
                 # Botões de ação
@@ -520,7 +624,7 @@ if st.session_state.show_stats and st.session_state.history:
     
     with col_stat1:
         st.markdown(f"""
-            <div class='stat-card'>
+            <div class='stat-card animate-in'>
                 <div class='stat-value'>{st.session_state.total_audios}</div>
                 <div class='stat-label'>Áudios Gerados</div>
             </div>
@@ -528,7 +632,7 @@ if st.session_state.show_stats and st.session_state.history:
     
     with col_stat2:
         st.markdown(f"""
-            <div class='stat-card'>
+            <div class='stat-card animate-in'>
                 <div class='stat-value'>{st.session_state.total_characters:,}</div>
                 <div class='stat-label'>Caracteres Processados</div>
             </div>
@@ -537,23 +641,25 @@ if st.session_state.show_stats and st.session_state.history:
     with col_stat3:
         avg_chars = st.session_state.total_characters // max(st.session_state.total_audios, 1)
         st.markdown(f"""
-            <div class='stat-card'>
+            <div class='stat-card animate-in'>
                 <div class='stat-value'>{avg_chars:,}</div>
                 <div class='stat-label'>Média por Áudio</div>
             </div>
         """, unsafe_allow_html=True)
     
     # Histórico recente
-    st.markdown("#### 🕒 Histórico Recente")
+    st.markdown("#### 🕒 Histórico Recente (Últimos 5)")
     for item in reversed(st.session_state.history[-5:]):
         st.markdown(f"""
-            <div class='audio-card'>
+            <div class='audio-card animate-in'>
                 <strong>🎵 {item['name']}</strong><br>
                 <small>
                 📅 {item['timestamp']} | 
                 🌍 {item['language']} | 
                 📊 {format_file_size(item['size'])} | 
-                📝 {item['chars']} caracteres
+                📝 {item['chars']} caracteres |
+                💬 {item['words']} palavras |
+                ⏱️ {item['duration']}
                 </small>
             </div>
         """, unsafe_allow_html=True)
@@ -563,93 +669,130 @@ if st.session_state.show_stats and st.session_state.history:
 # ============================================
 
 with st.sidebar:
+    # Cabeçalho da sidebar
     st.markdown(f"""
-        <div style='text-align: center; padding: 20px;'>
-            <h1 style='color: #667eea; font-size: 2.5rem;'>{VoicifyConfig.APP_ICON}</h1>
-            <h2 style='color: #667eea;'>Voicify</h2>
-            <p style='color: #666;'>v{VoicifyConfig.VERSION}</p>
+        <div style='text-align: center; padding: 1.5rem 0;'>
+            <div style='font-size: 4rem; margin-bottom: 0.5rem;'>{VoicifyConfig.APP_ICON}</div>
+            <h2 style='color: #667eea; margin: 0;'>Voicify</h2>
+            <p style='color: #999; font-size: 0.9rem; margin-top: 0.3rem;'>v{VoicifyConfig.VERSION}</p>
         </div>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
     
+    # Como usar
     st.markdown("### 📖 Como Usar")
+    
+    steps = [
+        ("1️⃣", "Nomeie seu áudio", "Dê um nome descritivo para o arquivo"),
+        ("2️⃣", "Digite o texto", "Cole ou digite o conteúdo"),
+        ("3️⃣", "Escolha o idioma", "Selecione idioma e sotaque"),
+        ("4️⃣", "Gere o áudio", "Clique no botão e aguarde"),
+        ("5️⃣", "Baixe ou ouça", "Player integrado ou download MP3")
+    ]
+    
+    for emoji, title, description in steps:
+        st.markdown(f"""
+            <div class='feature-box'>
+                <strong>{emoji} {title}</strong><br>
+                <small>{description}</small>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Recursos
+    st.markdown("### ✨ Recursos")
+    
+    features = [
+        ("🌍", "16 idiomas com variantes"),
+        ("📊", "Estatísticas em tempo real"),
+        ("💾", "Download MP3 direto"),
+        ("🎵", "Player integrado para preview"),
+        ("📈", "Contador de palavras automático"),
+        ("⏱️", "Estimativa de duração"),
+        ("📜", "Histórico de gerações"),
+        ("🎨", "Interface moderna e intuitiva")
+    ]
+    
+    for icon, feature in features:
+        st.markdown(f"""
+            <div style='padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;'>
+                <span style='font-size: 1.2rem;'>{icon}</span>
+                <span style='margin-left: 0.5rem; color: #555;'>{feature}</span>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Suporte e informações
+    st.markdown("### 🛠️ Informações")
+    
     st.markdown("""
-        <div class='feature-box'>
-            <strong>1️⃣ Nomeie seu áudio</strong><br>
-            <small>Dê um nome descritivo para o arquivo</small>
-        </div>
-        <div class='feature-box'>
-            <strong>2️⃣ Digite o texto</strong><br>
-            <small>Cole ou digite o conteúdo</small>
-        </div>
-        <div class='feature-box'>
-            <strong>3️⃣ Escolha o idioma</strong><br>
-            <small>Selecione idioma e sotaque</small>
-        </div>
-        <div class='feature-box'>
-            <strong>4️⃣ Gere o áudio</strong><br>
-            <small>Clique no botão e aguarde</small>
-        </div>
-        <div class='feature-box'>
-            <strong>5️⃣ Baixe ou ouça</strong><br>
-            <small>Player integrado ou download MP3</small>
+        <div style='background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); 
+                    padding: 1rem; border-radius: 10px; border-left: 4px solid #1976d2;'>
+            <p style='margin: 0; color: #0d47a1;'><strong>Idiomas Suportados:</strong></p>
+            <ul style='margin: 0.5rem 0; padding-left: 1.5rem; color: #1565c0;'>
+                <li>Português (BR/PT)</li>
+                <li>Inglês (US/UK/AU)</li>
+                <li>Espanhol (ES/MX)</li>
+                <li>E mais 10 idiomas!</li>
+            </ul>
+            <p style='margin-top: 1rem; margin-bottom: 0; color: #0d47a1;'><strong>Limites:</strong></p>
+            <ul style='margin: 0.5rem 0 0 0; padding-left: 1.5rem; color: #1565c0;'>
+                <li>Máx: 10.000 caracteres</li>
+                <li>Formato: MP3</li>
+                <li>Qualidade: Alta</li>
+            </ul>
         </div>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    st.markdown("### ✨ Recursos")
-    st.markdown("""
-    - 🌍 **16 idiomas** com variantes
-    - 📊 **Estatísticas** em tempo real
-    - 💾 **Download MP3** direto
-    - 🎵 **Player integrado** para preview
-    - 📈 **Contador de palavras** automático
-    - ⏱️ **Estimativa de duração**
-    - 📜 **Histórico** de gerações
-    - 🎨 **Interface moderna** e intuitiva
-    """)
+    # Estatísticas da sessão (se houver)
+    if st.session_state.total_audios > 0:
+        st.markdown("### 📊 Estatísticas da Sessão")
+        st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        padding: 1rem; border-radius: 10px; color: white;'&gt;
+            <p style='margin: 0 0 0.5rem 0; font-size: 1.1rem;'><strong>🎯 Áudios Gerados:</strong> {st.session_state.total_audios}</p>
+            <p style='margin: 0 0 0.5rem 0;'><strong>📝 Caracteres Totais:</strong> {st.session_state.total_characters:,}</p>
+            <p style='margin: 0;'><strong>⚡ Média por Áudio:</strong> {st.session_state.total_characters // max(st.session_state.total_audios, 1):,} chars</p>
+        </div>
+    """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    st.markdown("### 🛠️ Suporte")
-    st.info("""
-    **Idiomas Suportados:**
-    - Português (BR/PT)
-    - Inglês (US/UK/AU)
-    - Espanhol (ES/MX)
-    - E mais 10 idiomas!
-    
-    **Limites:**
-    - Máx: 10.000 caracteres
-    - Formato: MP3
-    - Qualidade: Alta
-    """)
-    
-    st.markdown("---")
-    
+    # Botão para limpar histórico
     if st.button("🗑️ Limpar Histórico", use_container_width=True):
         st.session_state.history = []
         st.session_state.total_audios = 0
         st.session_state.total_characters = 0
         st.success("✅ Histórico limpo!")
         st.rerun()
+    
+    # Footer da sidebar
+    st.markdown("---")
+    st.markdown("""
+        <div style='text-align: center; padding: 1rem 0; color: #999; font-size: 0.85rem;'>
+            <p style='margin: 0;'>Desenvolvido com ❤️</p>
+            <p style='margin: 0.3rem 0 0 0;'>Powered by gTTS & Streamlit</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 # ============================================
-# FOOTER
+# RODAPÉ PRINCIPAL
 # ============================================
 
 st.markdown("---")
 st.markdown("""
-    <div style='text-align: center; color: #666; padding: 2rem 0;'>
-        <p style='font-size: 1.1rem;'>
-            <strong>Voicify</strong> - Desenvolvido com ❤️ usando 
-            <a href='https://streamlit.io' target='_blank' style='color: #667eea;'>Streamlit</a> e 
-            <a href='https://github.com/pndurette/gTTS' target='_blank' style='color: #667eea;'>gTTS</a>
+    <div style='text-align: center; padding: 2rem 0; color: #666;'>
+        <p style='margin: 0; font-size: 0.9rem;'>
+            🎤 <strong>Voicify</strong> - Transforme texto em áudio de qualidade profissional
         </p>
-        <p style='font-size: 0.9rem;'>
-            © 2024 Voicify. Geração de voz multilíngue com inteligência artificial.
+        <p style='margin: 0.5rem 0 0 0; font-size: 0.85rem; color: #999;'>
+            Versão {VoicifyConfig.VERSION} | Suporte a 16 idiomas | Tecnologia gTTS
         </p>
     </div>
-""", unsafe_allow_html=True)
+""".format(VoicifyConfig.VERSION), unsafe_allow_html=True)
+
