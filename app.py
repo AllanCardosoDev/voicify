@@ -5,7 +5,7 @@ import os
 
 # Configuração da página
 st.set_page_config(
-    page_title="VoxStream - TTS Multilíngue", 
+    page_title="Voicify - TTS Multilíngue", 
     page_icon="🎤", 
     layout="wide"
 )
@@ -13,7 +13,7 @@ st.set_page_config(
 # Título principal
 st.markdown("""
     <h1 style='text-align: center; color: #1E88E5; margin-bottom: 0;'>
-        VoxStream
+        Voicify
     </h1>
     <h3 style='text-align: center; color: #666; margin-top: 0;'>
         Gerador de Voz Multilíngue com IA
@@ -96,7 +96,7 @@ if st.button("🎙️ Gerar Áudio", type="primary"):
 with st.sidebar:
     st.markdown("""
         <div style='text-align: center; padding: 20px;'>
-            <h2 style='color: #1E88E5;'>VoxStream</h2>
+            <h2 style='color: #1E88E5;'>Voicify</h2>
         </div>
         """, unsafe_allow_html=True)
     
@@ -118,6 +118,7 @@ with st.sidebar:
 st.markdown("---")
 st.markdown("""
     <div style='text-align: center; color: #666;'>
-        <p>VoxStream - Desenvolvido com ❤️ usando Streamlit e gTTS</p>
+        <p>Voicify - Desenvolvido com ❤️ usando Streamlit e gTTS</p>
     </div>
+
     """, unsafe_allow_html=True)
