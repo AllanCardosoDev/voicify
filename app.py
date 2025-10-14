@@ -1,124 +1,142 @@
-import streamlit as st
-from gtts import gTTS
-import io
-import os
+"""
+Configurações do Voicify
+"""
+from dataclasses import dataclass
+from typing import Dict, List
 
-# Configuração da página
-st.set_page_config(
-    page_title="Voicify - TTS Multilíngue", 
-    page_icon="🎤", 
-    layout="wide"
-)
-
-# Título principal
-st.markdown("""
-    <h1 style='text-align: center; color: #1E88E5; margin-bottom: 0;'>
-        Voicify
-    </h1>
-    <h3 style='text-align: center; color: #666; margin-top: 0;'>
-        Gerador de Voz Multilíngue com IA
-    </h3>
-    """, unsafe_allow_html=True)
-
-st.markdown("---")
-
-# Interface principal
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    # Nome do áudio
-    audio_name = st.text_input(
-        "Nome do áudio:",
-        placeholder="Digite o nome base para o(s) arquivo(s)"
-    )
+@dataclass
+class VoicifyConfig:
+    """Configurações gerais da aplicação."""
+    APP_TITLE = "Voicify - TTS Multilíngue Avançado"
+    APP_ICON = "🎤"
+    VERSION = "2.0"
     
-    # Área de texto
-    text_input = st.text_area(
-        "Digite o texto para converter em áudio:",
-        height=200,
-        placeholder="Digite seu texto aqui..."
-    )
-
-with col2:
-    st.subheader("⚙️ Configurações")
+    # Limites
+    MAX_TEXT_LENGTH = 10000  # caracteres
+    MAX_BATCH_SIZE = 10  # textos
     
-    # Seleção de idioma
-    languages = {
-        "Português": "pt",
-        "Inglês": "en",
-        "Espanhol": "es",
-        "Francês": "fr",
-        "Alemão": "de",
-        "Italiano": "it",
-        "Russo": "ru",
-        "Chinês": "zh-cn",
-        "Japonês": "ja",
-        "Coreano": "ko"
+    # Configurações de áudio
+    DEFAULT_SPEED = 1.0
+    MIN_SPEED = 0.5
+    MAX_SPEED = 2.0
+    
+    # Cache
+    ENABLE_CACHE = True
+    CACHE_DIR = ".audio_cache"
+    MAX_CACHE_SIZE_MB = 100
+
+
+@dataclass
+class LanguageConfig:
+    """Configurações de idiomas e variantes."""
+    
+    LANGUAGES = {
+        "Português (Brasil)": {"code": "pt-br", "flag": "🇧🇷", "tld": "com.br"},
+        "Português (Portugal)": {"code": "pt-pt", "flag": "🇵🇹", "tld": "pt"},
+        "Inglês (EUA)": {"code": "en-us", "flag": "🇺🇸", "tld": "com"},
+        "Inglês (UK)": {"code": "en-gb", "flag": "🇬🇧", "tld": "co.uk"},
+        "Inglês (Austrália)": {"code": "en-au", "flag": "🇦🇺", "tld": "com.au"},
+        "Espanhol (Espanha)": {"code": "es-es", "flag": "🇪🇸", "tld": "es"},
+        "Espanhol (México)": {"code": "es-mx", "flag": "🇲🇽", "tld": "com.mx"},
+        "Francês": {"code": "fr", "flag": "🇫🇷", "tld": "fr"},
+        "Alemão": {"code": "de", "flag": "🇩🇪", "tld": "de"},
+        "Italiano": {"code": "it", "flag": "🇮🇹", "tld": "it"},
+        "Russo": {"code": "ru", "flag": "🇷🇺", "tld": "ru"},
+        "Chinês (Simplificado)": {"code": "zh-cn", "flag": "🇨🇳", "tld": "com"},
+        "Japonês": {"code": "ja", "flag": "🇯🇵", "tld": "co.jp"},
+        "Coreano": {"code": "ko", "flag": "🇰🇷", "tld": "co.kr"},
+        "Árabe": {"code": "ar", "flag": "🇸🇦", "tld": "com"},
+        "Hindi": {"code": "hi", "flag": "🇮🇳", "tld": "co.in"},
     }
     
-    selected_language = st.selectbox(
-        "Idioma:",
-        list(languages.keys()),
-        index=0
-    )
-
-# Botão de geração
-if st.button("🎙️ Gerar Áudio", type="primary"):
-    if not text_input:
-        st.warning("⚠️ Por favor, digite algum texto")
-    elif not audio_name:
-        st.warning("⚠️ Por favor, forneça um nome para o áudio")
-    else:
-        try:
-            with st.spinner("Gerando áudio..."):
-                # Gerar áudio
-                tts = gTTS(text=text_input, lang=languages[selected_language])
-                audio_buffer = io.BytesIO()
-                tts.write_to_fp(audio_buffer)
-                audio_buffer.seek(0)
-                
-                # Exibir player de áudio
-                st.success("✅ Áudio gerado com sucesso!")
-                st.audio(audio_buffer, format='audio/mp3')
-                
-                # Botão de download
-                st.download_button(
-                    label="📥 Baixar Áudio",
-                    data=audio_buffer,
-                    file_name=f"{audio_name}.mp3",
-                    mime="audio/mp3"
-                )
-                
-        except Exception as e:
-            st.error(f"❌ Erro ao gerar áudio: {str(e)}")
-
-# Sidebar
-with st.sidebar:
-    st.markdown("""
-        <div style='text-align: center; padding: 20px;'>
-            <h2 style='color: #1E88E5;'>Voicify</h2>
-        </div>
-        """, unsafe_allow_html=True)
+    @classmethod
+    def get_language_list(cls) -> List[str]:
+        """Retorna lista de idiomas."""
+        return list(cls.LANGUAGES.keys())
     
-    st.header("ℹ️ Informações")
-    st.markdown("""
-    ### Como usar
-    1. Digite um nome para o áudio
-    2. Cole ou digite seu texto
-    3. Escolha o idioma
-    4. Clique em 'Gerar Áudio'
-    
-    ### Recursos
-    - Suporte a múltiplos idiomas
-    - Download em MP3
-    - Interface simples e rápida
-    """)
+    @classmethod
+    def get_language_info(cls, language_name: str) -> Dict:
+        """Retorna informações do idioma."""
+        return cls.LANGUAGES.get(language_name, {})
 
-# Footer
-st.markdown("---")
-st.markdown("""
-    <div style='text-align: center; color: #666;'>
-        <p>Voicify - Desenvolvido com ❤️ usando Streamlit e gTTS</p>
-    </div>
 
-    """, unsafe_allow_html=True)
+# Estilos CSS customizados
+CUSTOM_CSS = """
+<style>
+    .main-title {
+        text-align: center;
+        color: #1E88E5;
+        font-size: 3rem;
+        font-weight: bold;
+        margin-bottom: 0;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+    .subtitle {
+        text-align: center;
+        color: #666;
+        font-size: 1.2rem;
+        margin-top: 0;
+    }
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        color: white;
+        text-align: center;
+        margin: 0.5rem 0;
+    }
+    .stat-value {
+        font-size: 2rem;
+        font-weight: bold;
+    }
+    .stat-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+    .audio-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-left: 4px solid #1E88E5;
+    }
+    .success-box {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 1rem 0;
+    }
+    .warning-box {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        color: #856404;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 1rem 0;
+    }
+    .info-box {
+        background: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 1rem 0;
+    }
+    .stButton > button {
+        width: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-weight: bold;
+        border: none;
+        padding: 0.75rem 1rem;
+        border-radius: 5px;
+        transition: all 0.3s;
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+</style>
+"""
